@@ -1,0 +1,2024 @@
+<title>Whisper Browser Integration — Implementation Plan</title>
+
+<style>
+  /* === TOKENS === */
+  :root {
+    --ground: #0c0e0d;
+    --surface: #141714;
+    --surface-2: #1c211d;
+    --text: #dde8d8;
+    --text-mid: #9db0a4;
+    --text-dim: #5c7268;
+    --accent: #b8d94a;
+    --accent-dim: rgba(184, 217, 74, 0.1);
+    --accent-border: rgba(184, 217, 74, 0.22);
+    --teal: #4a8c72;
+    --teal-bright: #5eae8e;
+    --amber: #c8a96e;
+    --border: #1e2620;
+    --font-mono:
+      ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, monospace;
+    --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  /* === RESET === */
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* === LAYOUT === */
+  .layout {
+    display: grid;
+    grid-template-columns: 196px 1fr;
+    max-width: 1080px;
+    margin: 0 auto;
+    min-height: 100vh;
+  }
+
+  /* === NAV === */
+  .nav {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 32px 12px 32px 20px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+  .nav-brand {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    line-height: 1.4;
+  }
+  .nav-group {
+    margin-bottom: 6px;
+  }
+  .nav-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 10px 8px 4px;
+    display: block;
+  }
+  .nav-link {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 5px 8px;
+    border-radius: 4px;
+    border-left: 2px solid transparent;
+    text-decoration: none;
+    line-height: 1.4;
+    transition:
+      color 0.12s,
+      border-color 0.12s,
+      background 0.12s;
+  }
+  .nav-link:hover {
+    color: var(--text-mid);
+    background: var(--accent-dim);
+    text-decoration: none;
+  }
+  .nav-link.active {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  /* === MAIN === */
+  .main {
+    min-width: 0;
+  }
+
+  /* === HERO === */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    padding: 72px 56px 64px;
+    border-bottom: 1px solid var(--border);
+  }
+  .hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent,
+      transparent 3px,
+      rgba(0, 0, 0, 0.06) 3px,
+      rgba(0, 0, 0, 0.06) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+  #waveCanvas {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 100px;
+    opacity: 0.35;
+  }
+  .hero-inner {
+    position: relative;
+    z-index: 2;
+    max-width: 520px;
+  }
+  .hero-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-bottom: 22px;
+  }
+  .hero h1 {
+    font-family: var(--font-mono);
+    font-size: clamp(40px, 5.5vw, 62px);
+    line-height: 1.06;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    color: var(--text-dim);
+    margin-bottom: 22px;
+  }
+  .hero h1 .hl {
+    color: var(--accent);
+  }
+  .hero-desc {
+    font-size: 14px;
+    color: var(--text-mid);
+    line-height: 1.7;
+    margin-bottom: 32px;
+  }
+  .hero-stats {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  .stat-value {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.1;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* === SECTIONS === */
+  .section {
+    padding: 52px 56px 48px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section:last-child {
+    border-bottom: none;
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .section-title {
+    font-family: var(--font-mono);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.015em;
+    margin-bottom: 6px;
+  }
+  .section-desc {
+    color: var(--text-mid);
+    font-size: 14px;
+    margin-bottom: 28px;
+    max-width: 560px;
+  }
+
+  /* === PHASE HEADER === */
+  .phase-header {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 24px;
+  }
+  .phase-num {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-border);
+    padding: 4px 10px;
+    border-radius: 3px;
+    letter-spacing: 0.06em;
+    flex-shrink: 0;
+    margin-top: 3px;
+  }
+  .phase-title {
+    font-family: var(--font-mono);
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+  .phase-sub {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .phase-goal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--teal-bright);
+    padding: 12px 16px;
+    border-radius: 5px;
+    font-size: 13px;
+    color: var(--text-mid);
+    margin-bottom: 20px;
+    line-height: 1.6;
+  }
+  .phase-goal strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* === CODE BLOCKS === */
+  .code-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 14px 0;
+  }
+  .code-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 16px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+  }
+  .code-file {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+  }
+  .code-lang {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .code-body {
+    padding: 18px 20px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text-mid);
+    overflow-x: auto;
+    white-space: pre;
+    tab-size: 2;
+  }
+  .kw {
+    color: var(--teal-bright);
+  }
+  .str {
+    color: var(--amber);
+  }
+  .cm {
+    color: var(--text-dim);
+    font-style: italic;
+  }
+  .hn {
+    color: var(--text);
+  }
+  .ac {
+    color: var(--accent);
+  }
+  .ty {
+    color: #7dbfa0;
+  }
+
+  /* === TERMINAL === */
+  .term {
+    background: #080b09;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 14px 0;
+  }
+  .term-hdr {
+    padding: 7px 16px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .term-body {
+    padding: 14px 18px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 2;
+    overflow-x: auto;
+  }
+  .cmd {
+    display: flex;
+    gap: 10px;
+    color: var(--text-mid);
+  }
+  .cmd::before {
+    content: "$";
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  .cmd-c {
+    color: var(--text-dim);
+    font-style: italic;
+    padding-left: 4px;
+  }
+
+  /* === DIAGRAM === */
+  .diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 24px 28px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.75;
+    color: var(--text-mid);
+    overflow-x: auto;
+    white-space: pre;
+    margin: 14px 0;
+  }
+  .db {
+    color: var(--teal-bright);
+  } /* diagram box */
+  .da {
+    color: var(--accent);
+  } /* diagram arrow */
+  .dl {
+    color: var(--text);
+  } /* diagram label */
+  .dn {
+    color: var(--text-dim);
+  } /* diagram note */
+
+  /* === DECISION GRID === */
+  .dec-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 18px 0;
+  }
+  .dec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 18px;
+  }
+  .dec-card.pick {
+    border-color: var(--accent-border);
+    background: linear-gradient(135deg, var(--accent-dim), var(--surface));
+  }
+  .dec-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .dec-badge-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .badge {
+    background: var(--accent);
+    color: var(--ground);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 2px 6px;
+    border-radius: 2px;
+  }
+  .dec-name {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .dec-desc {
+    font-size: 12px;
+    color: var(--text-mid);
+    line-height: 1.5;
+  }
+  .dec-pro {
+    font-size: 11px;
+    color: var(--teal-bright);
+    margin-top: 6px;
+  }
+  .dec-con {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* === MODEL TABLE === */
+  .model-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 18px 0;
+  }
+  .model-tbl th {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-align: left;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .model-tbl td {
+    padding: 10px 14px;
+    color: var(--text-mid);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.025);
+  }
+  .model-tbl tr.pick td {
+    color: var(--text);
+    background: var(--accent-dim);
+  }
+  .mn {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text);
+  }
+  .rec {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+  }
+
+  /* === CALLOUT === */
+  .callout {
+    display: flex;
+    gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    font-size: 13px;
+    color: var(--text-mid);
+    line-height: 1.6;
+    margin: 14px 0;
+  }
+  .callout.warn {
+    border-left: 3px solid var(--amber);
+  }
+  .callout.info {
+    border-left: 3px solid var(--teal-bright);
+  }
+  .callout strong {
+    color: var(--text);
+  }
+  .callout-icon {
+    flex-shrink: 0;
+    font-size: 14px;
+    margin-top: 1px;
+  }
+
+  /* === INLINE CODE === */
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    color: var(--accent);
+    background: var(--accent-dim);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* === STEPS === */
+  .steps {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    margin: 20px 0;
+    padding-left: 4px;
+  }
+  .steps::before {
+    content: "";
+    position: absolute;
+    left: 14px;
+    top: 28px;
+    bottom: 28px;
+    width: 1px;
+    background: var(--border);
+  }
+  .step {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 10px 0;
+  }
+  .step-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+  .step-dot.lit {
+    background: var(--accent-dim);
+    border-color: var(--accent-border);
+    color: var(--accent);
+  }
+  .step-body {
+    flex: 1;
+    padding-top: 3px;
+  }
+  .step-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+  .step-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  /* === FILE TREE === */
+  .file-tree {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px 22px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.85;
+    overflow-x: auto;
+  }
+  .ft-n {
+    color: var(--text-dim);
+  }
+  .ft-new {
+    color: var(--accent);
+  }
+  .ft-mod {
+    color: var(--teal-bright);
+  }
+
+  /* === CHECKLIST === */
+  .checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 14px 0;
+  }
+  .chk {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text-mid);
+  }
+  .chk-box {
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--teal);
+    border-radius: 3px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  /* === RESPONSIVE === */
+  @media (max-width: 768px) {
+    .layout {
+      grid-template-columns: 1fr;
+    }
+    .nav {
+      display: none;
+    }
+    .hero,
+    .section {
+      padding: 40px 24px 36px;
+    }
+    .dec-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    #waveCanvas {
+      display: none;
+    }
+  }
+</style>
+
+<div class="layout">
+  <!-- LEFT NAV -->
+  <nav class="nav" aria-label="Plan navigation">
+    <div class="nav-brand">Voiceover<br />Timestamper</div>
+
+    <div class="nav-group">
+      <span class="nav-label">Overview</span>
+      <a href="#architecture" class="nav-link">Architecture</a>
+      <a href="#tech-decision" class="nav-link">Tech Decision</a>
+      <a href="#models" class="nav-link">Model Sizes</a>
+    </div>
+
+    <div class="nav-group">
+      <span class="nav-label">Implementation</span>
+      <a href="#phase-1" class="nav-link">01 — Setup</a>
+      <a href="#phase-2" class="nav-link">02 — Audio</a>
+      <a href="#phase-3" class="nav-link">03 — Worker</a>
+      <a href="#phase-4" class="nav-link">04 — Service</a>
+      <a href="#phase-5" class="nav-link">05 — State</a>
+      <a href="#phase-6" class="nav-link">06 — UI</a>
+    </div>
+
+    <div class="nav-group">
+      <span class="nav-label">Go Offline</span>
+      <a href="#model-download" class="nav-link">Download Guide</a>
+      <a href="#file-structure" class="nav-link">File Structure</a>
+      <a href="#testing" class="nav-link">Testing</a>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+    <!-- HERO -->
+    <header class="hero" id="top">
+      <canvas id="waveCanvas" aria-hidden="true"></canvas>
+      <div class="hero-inner">
+        <div class="hero-eyebrow">Engineering Plan · Voiceover Timestamper</div>
+        <h1><span class="hl">Whisper</span><br />in the<br />Browser.</h1>
+        <p class="hero-desc">
+          Replace <code>mockTranscript.ts</code> with real Whisper inference
+          running entirely in the browser — using
+          <code>@huggingface/transformers</code> and a Web Worker. Offline after
+          first model load. No server, no API key, no cost per minute.
+        </p>
+        <div class="hero-stats">
+          <div>
+            <span class="stat-value">6</span
+            ><span class="stat-label"> phases</span>
+          </div>
+          <div>
+            <span class="stat-value">4</span
+            ><span class="stat-label"> new files</span>
+          </div>
+          <div>
+            <span class="stat-value">~6h</span
+            ><span class="stat-label"> estimated</span>
+          </div>
+          <div>
+            <span class="stat-value">0</span
+            ><span class="stat-label"> servers</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ARCHITECTURE -->
+    <section class="section" id="architecture">
+      <div class="eyebrow">Overview</div>
+      <div class="section-title">How it fits together</div>
+      <p class="section-desc">
+        The browser tab runs two threads. The main thread owns the React UI and
+        the Web Audio API. A dedicated Web Worker owns the Whisper model and
+        ONNX Runtime. They communicate by message passing — audio goes in as
+        <code>Float32Array</code>, transcript chunks come back as JSON.
+      </p>
+
+      <div class="diagram">
+        <span class="db"
+          >┌─────────────────────────────────────────────────────────────┐ │
+          Browser Tab │ │ │ │ ┌────────────────────────┐
+          ┌───────────────────────────┐ │ │ │ Main Thread │ │ Web Worker │ │ │ │
+          │ │ │ │ │ │ React UI │ │ @huggingface/transformers │ │ │ │
+          useTranscriptWorkflow │───▶│ ONNX Runtime Web (WASM) │ │ │ │
+          useAudioMetadata │◀───│ Whisper encoder+decoder │ │ │ │ │ │ │ │ │ │
+          ┌──────────────────┐ │ │ Runs inference without │ │ │ │ │ Web Audio
+          API │ │ │ blocking the UI thread │ │ │ │ │ OfflineAudio │ │ │ │ │ │ │
+          │ Context │ │ └───────────────────────────┘ │ │ │ └──────────────────┘
+          │ │ │ │ └────────────────────────┘ │ │ │ │ ▼ │ │ │
+          ┌──────────────────┐ │ │ │ Float32Array │ Cache API │ │ │ │ (16kHz
+          mono) ────▶│ model weights │ │ │ │ persist offline │ │
+          └───────────────────────────────────────────────────────────┘</span
+        >
+      </div>
+
+      <p style="font-size: 13px; color: var(--text-mid); margin-top: 16px">
+        The message protocol between threads is simple:
+      </p>
+
+      <div class="diagram">
+        <span class="dl">Main Thread Web Worker</span> │ │ │<span class="da"
+          >──── LOAD_MODEL { modelId } ────────────▶</span
+        >│ │ │ <span class="dn">downloads from HF CDN</span> │<span class="da"
+          >◀─── MODEL_PROGRESS { file, % } ────────</span
+        >│ <span class="dn">or reads from Cache API</span> │<span class="da"
+          >◀─── MODEL_READY ───────────────────────</span
+        >│ │ │ │<span class="da">──── TRANSCRIBE { audio: Float32Array }─▶</span
+        >│ │ │ <span class="dn">ONNX inference, 30s chunks</span> │<span
+          class="da"
+          >◀─── TRANSCRIPTION_DONE { chunks[] } ───</span
+        >│ │ │
+      </div>
+    </section>
+
+    <!-- TECH DECISION -->
+    <section class="section" id="tech-decision">
+      <div class="eyebrow">Tech Decision</div>
+      <div class="section-title">
+        Why @huggingface/transformers, not whisper.cpp
+      </div>
+      <p class="section-desc">
+        Two paths exist for running Whisper in the browser. One aligns with your
+        plan to download from HuggingFace.
+      </p>
+
+      <div class="dec-grid">
+        <div class="dec-card pick">
+          <div class="dec-badge-row">
+            <span class="dec-badge-label">Option A</span>
+            <span class="badge">CHOSEN</span>
+          </div>
+          <div class="dec-name">@huggingface/transformers</div>
+          <div class="dec-desc">
+            Runs Whisper ONNX models in the browser via ONNX Runtime Web.
+            HuggingFace hosts ready-to-use quantized models. First-party caching
+            via Cache API — offline after one download.
+          </div>
+          <div class="dec-pro">+ Native HF model format, no conversion</div>
+          <div class="dec-pro">+ Works with your planned HF download</div>
+          <div class="dec-pro">+ Built-in chunking for long audio</div>
+        </div>
+        <div class="dec-card">
+          <div class="dec-badge-row">
+            <span class="dec-badge-label">Option B</span>
+          </div>
+          <div class="dec-name">whisper.cpp + WASM</div>
+          <div class="dec-desc">
+            Compiles whisper.cpp to WebAssembly. Potentially faster on some
+            hardware. Requires converting PyTorch weights to ggml format and
+            building the WASM binary.
+          </div>
+          <div class="dec-con">− Custom build pipeline, not HF native</div>
+          <div class="dec-con">− More complex worker setup</div>
+          <div class="dec-con">− No built-in chunking or caching</div>
+        </div>
+      </div>
+
+      <div class="callout info" style="margin-top: 20px">
+        <div class="callout-icon">ℹ</div>
+        <div>
+          <strong>One important setup requirement:</strong> Multi-threaded ONNX
+          Runtime (faster) needs <code>SharedArrayBuffer</code>, which needs two
+          HTTP headers: <code>Cross-Origin-Opener-Policy: same-origin</code> and
+          <code>Cross-Origin-Embedder-Policy: require-corp</code>. Phase 1 adds
+          these to Vite's dev and preview servers. They're standard for any app
+          doing browser-side ML.
+        </div>
+      </div>
+    </section>
+
+    <!-- MODEL SIZES -->
+    <section class="section" id="models">
+      <div class="eyebrow">Model Selection</div>
+      <div class="section-title">Choosing the right Whisper size</div>
+      <p class="section-desc">
+        All sizes run fully in the browser. Larger models are more accurate but
+        slower. For English voiceover work, <strong>whisper-base.en</strong> is
+        the recommended starting point.
+      </p>
+
+      <table class="model-tbl">
+        <thead>
+          <tr>
+            <th>Model ID (HuggingFace)</th>
+            <th>Download (q8)</th>
+            <th>Speed on CPU</th>
+            <th>Use case</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="mn">Xenova/whisper-tiny.en</span></td>
+            <td>~78 MB</td>
+            <td>~realtime</td>
+            <td>Fast iteration, testing</td>
+          </tr>
+          <tr class="pick">
+            <td>
+              <span class="mn">Xenova/whisper-base.en</span>
+              <span class="rec">← RECOMMENDED</span>
+            </td>
+            <td>~145 MB</td>
+            <td>~1.5× realtime</td>
+            <td>English voiceovers, good accuracy</td>
+          </tr>
+          <tr>
+            <td><span class="mn">Xenova/whisper-small.en</span></td>
+            <td>~490 MB</td>
+            <td>~4× realtime</td>
+            <td>High accuracy, patient wait</td>
+          </tr>
+          <tr>
+            <td><span class="mn">Xenova/whisper-tiny</span></td>
+            <td>~78 MB</td>
+            <td>~realtime</td>
+            <td>Multilingual, fastest</td>
+          </tr>
+          <tr>
+            <td><span class="mn">Xenova/whisper-base</span></td>
+            <td>~145 MB</td>
+            <td>~1.5× realtime</td>
+            <td>Multilingual balanced</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout info">
+        <div class="callout-icon">ℹ</div>
+        <div>
+          <strong>q8 = 8-bit quantized.</strong> Transformers.js downloads the
+          quantized variant by default (via <code>dtype: 'q8'</code>), which is
+          ~2× smaller than full precision with minimal accuracy loss. The ONNX
+          repo contains both; only the quantized files get downloaded.
+        </div>
+      </div>
+    </section>
+
+    <!-- PHASE 1 -->
+    <section class="section" id="phase-1">
+      <div class="phase-header">
+        <div class="phase-num">PHASE 01</div>
+        <div class="phase-meta">
+          <div class="phase-title">Dependencies & Vite Configuration</div>
+          <div class="phase-sub">~20 minutes · 2 files changed</div>
+        </div>
+      </div>
+
+      <div class="phase-goal">
+        <strong>Goal:</strong> Install the transformers library and configure
+        Vite so that ONNX Runtime WASM loads correctly and gets the HTTP headers
+        it needs for multi-threading.
+      </div>
+
+      <div class="term">
+        <div class="term-hdr">Terminal</div>
+        <div class="term-body">
+          <div class="cmd">npm install @huggingface/transformers</div>
+        </div>
+      </div>
+
+      <p style="font-size: 13px; color: var(--text-mid); margin: 16px 0 8px">
+        Then update <code>vite.config.ts</code> — the only change is three new
+        fields added to the existing config:
+      </p>
+
+      <div class="code-block">
+        <div class="code-hdr">
+          <span class="code-file">vite.config.ts</span
+          ><span class="code-lang">TypeScript</span>
+        </div>
+        <div class="code-body">
+          <span class="kw">import</span> {
+          <span class="hn">defineConfig</span> } <span class="kw">from</span>
+          <span class="str">'vite'</span> <span class="kw">import</span>
+          <span class="hn">react</span> <span class="kw">from</span>
+          <span class="str">'@vitejs/plugin-react'</span>
+          <span class="kw">import</span> <span class="hn">tailwindcss</span>
+          <span class="kw">from</span>
+          <span class="str">'@tailwindcss/vite'</span>
+
+          <span class="kw">export default</span>
+          <span class="hn">defineConfig</span>({ plugins: [<span class="hn"
+            >react</span
+          >(), <span class="hn">tailwindcss</span>()],
+
+          <span class="cm"
+            >// Prevent Vite's optimizer from bundling this package.</span
+          >
+          <span class="cm"
+            >// It loads WASM dynamically at runtime and breaks if
+            pre-bundled.</span
+          >
+          optimizeDeps: { exclude: [<span class="str"
+            >'@huggingface/transformers'</span
+          >], },
+
+          <span class="cm"
+            >// SharedArrayBuffer — required for multi-threaded ONNX
+            Runtime.</span
+          >
+          server: { headers: {
+          <span class="str">'Cross-Origin-Opener-Policy'</span>:
+          <span class="str">'same-origin'</span>,
+          <span class="str">'Cross-Origin-Embedder-Policy'</span>:
+          <span class="str">'require-corp'</span>, }, }, preview: { headers: {
+          <span class="str">'Cross-Origin-Opener-Policy'</span>:
+          <span class="str">'same-origin'</span>,
+          <span class="str">'Cross-Origin-Embedder-Policy'</span>:
+          <span class="str">'require-corp'</span>, }, }, })
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-icon">⚠</div>
+        <div>
+          <strong>These headers affect iframe embedding.</strong> After adding
+          COOP/COEP, the app can no longer be embedded in iframes from other
+          origins. That's fine for a local tool. If you later want embedding,
+          you can fall back to single-threaded mode by removing the headers and
+          adding <code>numThreads: 1</code> to the ONNX session options.
+        </div>
+      </div>
+    </section>
+
+    <!-- PHASE 2 -->
+    <section class="section" id="phase-2">
+      <div class="phase-header">
+        <div class="phase-num">PHASE 02</div>
+        <div class="phase-meta">
+          <div class="phase-title">Audio Preprocessing Pipeline</div>
+          <div class="phase-sub">~45 minutes · 1 new file</div>
+        </div>
+      </div>
+
+      <div class="phase-goal">
+        <strong>Goal:</strong> Create a utility that takes the user's uploaded
+        audio file and converts it to a <code>Float32Array</code> at exactly 16
+        kHz mono — the format Whisper expects. This uses the browser's
+        <code>OfflineAudioContext</code>, which handles any sample rate, any
+        channel count, any supported audio format.
+      </div>
+
+      <div class="code-block">
+        <div class="code-hdr">
+          <span class="code-file">src/utils/audioProcessing.ts</span
+          ><span class="code-lang">TypeScript — NEW FILE</span>
+        </div>
+        <div class="code-body">
+          <span class="cm">// Whisper requires 16 kHz mono Float32Array.</span>
+          <span class="cm"
+            >// OfflineAudioContext handles resampling and stereo downmix
+            natively.</span
+          >
+          <span class="kw">export async function</span>
+          <span class="hn">decodeAudioToFloat32</span>( file:
+          <span class="ty">File</span>, targetSampleRate =
+          <span class="ac">16_000</span>, ):
+          <span class="ty">Promise</span>&lt;<span class="ty">Float32Array</span
+          >&gt; { <span class="kw">const</span> arrayBuffer =
+          <span class="kw">await</span> file.<span class="hn">arrayBuffer</span
+          >();
+
+          <span class="cm">// Decode at native rate first</span>
+          <span class="kw">const</span> audioCtx = <span class="kw">new</span>
+          <span class="ty">AudioContext</span>();
+          <span class="kw">const</span> decoded =
+          <span class="kw">await</span> audioCtx.<span class="hn"
+            >decodeAudioData</span
+          >(arrayBuffer); <span class="kw">await</span> audioCtx.<span
+            class="hn"
+            >close</span
+          >();
+
+          <span class="cm"
+            >// Resample + downmix to 1-channel 16 kHz via
+            OfflineAudioContext.</span
+          >
+          <span class="cm"
+            >// The spec mandates automatic stereo-to-mono downmix when channel
+            counts differ.</span
+          >
+          <span class="kw">const</span> offlineCtx = <span class="kw">new</span>
+          <span class="ty">OfflineAudioContext</span>(
+          <span class="ac">1</span>,
+          <span class="cm">// output channels: mono</span>
+          <span class="ty">Math</span>.<span class="hn">ceil</span
+          >(decoded.duration * targetSampleRate),
+          <span class="cm">// total output samples</span>
+          targetSampleRate, );
+
+          <span class="kw">const</span> source = offlineCtx.<span class="hn"
+            >createBufferSource</span
+          >(); source.buffer = decoded; source.<span class="hn">connect</span
+          >(offlineCtx.destination); source.<span class="hn">start</span>(<span
+            class="ac"
+            >0</span
+          >);
+
+          <span class="kw">const</span> resampled =
+          <span class="kw">await</span> offlineCtx.<span class="hn"
+            >startRendering</span
+          >(); <span class="kw">return</span> resampled.<span class="hn"
+            >getChannelData</span
+          >(<span class="ac">0</span>); }
+        </div>
+      </div>
+
+      <div class="callout info">
+        <div class="callout-icon">ℹ</div>
+        <div>
+          <strong>Memory note for long audio:</strong> A 30-minute file produces
+          a Float32Array of ~29 MB at 16 kHz. This is fine. Beyond 60 minutes,
+          consider chunking the audio before passing to the worker. For typical
+          voiceover work this won't be an issue.
+        </div>
+      </div>
+    </section>
+
+    <!-- PHASE 3 -->
+    <section class="section" id="phase-3">
+      <div class="phase-header">
+        <div class="phase-num">PHASE 03</div>
+        <div class="phase-meta">
+          <div class="phase-title">Whisper Web Worker</div>
+          <div class="phase-sub">~1.5 hours · 1 new file</div>
+        </div>
+      </div>
+
+      <div class="phase-goal">
+        <strong>Goal:</strong> Create the worker script that owns the Whisper
+        model for its entire lifecycle. It runs ONNX inference on a background
+        thread so the UI never freezes during transcription — even for a
+        20-minute voiceover.
+      </div>
+
+      <div class="code-block">
+        <div class="code-hdr">
+          <span class="code-file">src/workers/whisper.worker.ts</span
+          ><span class="code-lang">TypeScript — NEW FILE</span>
+        </div>
+        <div class="code-body">
+          <span class="kw">import</span> { <span class="hn">pipeline</span>,
+          <span class="hn">env</span> } <span class="kw">from</span>
+          <span class="str">'@huggingface/transformers'</span>;
+          <span class="kw">import type</span> {
+          <span class="ty">AutomaticSpeechRecognitionPipeline</span> }
+          <span class="kw">from</span>
+          <span class="str">'@huggingface/transformers'</span>;
+
+          <span class="cm"
+            >// Cache model weights in the browser's Cache API after first
+            download.</span
+          >
+          env.useBrowserCache = <span class="ac">true</span>;
+          env.allowLocalModels = <span class="ac">false</span>;
+          <span class="cm">// flip to true after running Phase 6 download</span>
+          env.allowRemoteModels = <span class="ac">true</span>;
+
+          <span class="cm"
+            >// ── Message types
+            ───────────────────────────────────────────────────</span
+          >
+
+          <span class="kw">type</span> <span class="ty">InMsg</span> = | { type:
+          <span class="str">'LOAD_MODEL'</span>; modelId:
+          <span class="ty">string</span> } | { type:
+          <span class="str">'TRANSCRIBE'</span>; audio:
+          <span class="ty">Float32Array</span> };
+
+          <span class="kw">type</span> <span class="ty">OutMsg</span> = | {
+          type: <span class="str">'MODEL_PROGRESS'</span>; file:
+          <span class="ty">string</span>; progress:
+          <span class="ty">number</span> } | { type:
+          <span class="str">'MODEL_READY'</span> } | { type:
+          <span class="str">'TRANSCRIPTION_DONE'</span>; chunks:
+          <span class="ty">Chunk</span>[] } | { type:
+          <span class="str">'ERROR'</span>; message:
+          <span class="ty">string</span> };
+
+          <span class="kw">type</span> <span class="ty">Chunk</span> = { text:
+          <span class="ty">string</span>; timestamp: [<span class="ty"
+            >number</span
+          >, <span class="ty">number</span>] };
+
+          <span class="cm"
+            >// ── State
+            ────────────────────────────────────────────────────────────</span
+          >
+
+          <span class="kw">let</span> transcriber:
+          <span class="ty">AutomaticSpeechRecognitionPipeline</span> |
+          <span class="kw">null</span> = <span class="kw">null</span>;
+
+          <span class="cm"
+            >// ── Handler
+            ──────────────────────────────────────────────────────────</span
+          >
+
+          self.<span class="hn">addEventListener</span>(<span class="str"
+            >'message'</span
+          >, <span class="kw">async</span> (event:
+          <span class="ty">MessageEvent</span>&lt;<span class="ty">InMsg</span
+          >&gt;) => { <span class="kw">const</span> msg = event.data;
+
+          <span class="kw">if</span> (msg.type ===
+          <span class="str">'LOAD_MODEL'</span>) { <span class="kw">try</span> {
+          transcriber = <span class="kw">await</span>
+          <span class="hn">pipeline</span>(<span class="str"
+            >'automatic-speech-recognition'</span
+          >, msg.modelId, { dtype: <span class="str">'q8'</span>,
+          progress_callback: (info: <span class="ty">Record</span>&lt;<span
+            class="ty"
+            >string</span
+          >, <span class="ty">unknown</span>&gt;) => {
+          <span class="kw">if</span> (info.status ===
+          <span class="str">'progress'</span>) { self.<span class="hn"
+            >postMessage</span
+          >({ type: <span class="str">'MODEL_PROGRESS'</span>, file: info.file
+          <span class="kw">as</span> <span class="ty">string</span>, progress:
+          info.progress <span class="kw">as</span>
+          <span class="ty">number</span>, } <span class="kw">satisfies</span>
+          <span class="ty">OutMsg</span>); } }, }); self.<span class="hn"
+            >postMessage</span
+          >({ type: <span class="str">'MODEL_READY'</span> }
+          <span class="kw">satisfies</span> <span class="ty">OutMsg</span>); }
+          <span class="kw">catch</span> (err) { self.<span class="hn"
+            >postMessage</span
+          >({ type: <span class="str">'ERROR'</span>, message:
+          <span class="ty">String</span>(err) }); } }
+
+          <span class="kw">if</span> (msg.type ===
+          <span class="str">'TRANSCRIBE'</span>) {
+          <span class="kw">if</span> (!transcriber) { self.<span class="hn"
+            >postMessage</span
+          >({ type: <span class="str">'ERROR'</span>, message:
+          <span class="str">'Model not loaded'</span> });
+          <span class="kw">return</span>; } <span class="kw">try</span> {
+          <span class="kw">const</span> result = <span class="kw">await</span>
+          <span class="hn">transcriber</span>(msg.audio, { return_timestamps:
+          <span class="ac">true</span>, chunk_length_s:
+          <span class="ac">30</span>,
+          <span class="cm">// process in 30-second windows</span>
+          stride_length_s: <span class="ac">5</span>,
+          <span class="cm">// 5-second overlap between windows</span>
+          });
+          <span class="kw">const</span> output =
+          <span class="ty">Array</span>.<span class="hn">isArray</span>(result)
+          ? result[<span class="ac">0</span>] : result;
+          <span class="kw">const</span> chunks: <span class="ty">Chunk</span>[]
+          = (output.chunks ?? []) .<span class="hn">filter</span>(c =>
+          c.text.<span class="hn">trim</span>()) .<span class="hn">map</span>(c
+          => ({ text: c.text.<span class="hn">trim</span>(), timestamp:
+          c.timestamp <span class="kw">as</span> [<span class="ty">number</span
+          >, <span class="ty">number</span>], })); self.<span class="hn"
+            >postMessage</span
+          >({ type: <span class="str">'TRANSCRIPTION_DONE'</span>, chunks }
+          <span class="kw">satisfies</span> <span class="ty">OutMsg</span>); }
+          <span class="kw">catch</span> (err) { self.<span class="hn"
+            >postMessage</span
+          >({ type: <span class="str">'ERROR'</span>, message:
+          <span class="ty">String</span>(err) }); } } });
+        </div>
+      </div>
+
+      <div class="callout info">
+        <div class="callout-icon">ℹ</div>
+        <div>
+          <strong>chunk_length_s / stride_length_s:</strong> Whisper processes
+          audio in 30-second windows. The stride is the overlap between
+          consecutive windows. This is how it handles audio longer than 30
+          seconds without losing words at the boundaries. Transformers.js
+          handles the chunking loop internally — you send the full audio array
+          and get back a flat list of chunks.
+        </div>
+      </div>
+    </section>
+
+    <!-- PHASE 4 -->
+    <section class="section" id="phase-4">
+      <div class="phase-header">
+        <div class="phase-num">PHASE 04</div>
+        <div class="phase-meta">
+          <div class="phase-title">Whisper Service Layer</div>
+          <div class="phase-sub">~1 hour · 1 new file</div>
+        </div>
+      </div>
+
+      <div class="phase-goal">
+        <strong>Goal:</strong> Create a service class that owns the worker,
+        exposes a clean async API to the React layer, and handles the lifecycle
+        (load once, reuse for all files, terminate on disposal). This is the
+        file that replaces <code>mockTranscript.ts</code> as the integration
+        point.
+      </div>
+
+      <div class="code-block">
+        <div class="code-hdr">
+          <span class="code-file">src/services/whisperService.ts</span
+          ><span class="code-lang">TypeScript — NEW FILE</span>
+        </div>
+        <div class="code-body">
+          <span class="cm"
+            >// Vite's way to bundle a worker as a separate module chunk.</span
+          >
+          <span class="kw">const</span> WORKER_URL = <span class="kw">new</span>
+          <span class="ty">URL</span>(<span class="str"
+            >'../workers/whisper.worker.ts'</span
+          >, <span class="kw">import</span>.meta.url);
+
+          <span class="kw">export type</span>
+          <span class="ty">TranscriptChunk</span> = { text:
+          <span class="ty">string</span>; timestamp: [<span class="ty"
+            >number</span
+          >, <span class="ty">number</span>];
+          <span class="cm">// [startSecs, endSecs]</span>
+          };
+
+          <span class="kw">type</span> <span class="ty">LoadOptions</span> = {
+          modelId: <span class="ty">string</span>; onProgress?: (file:
+          <span class="ty">string</span>, progress:
+          <span class="ty">number</span>) => <span class="ty">void</span>; };
+
+          <span class="kw">class</span> <span class="ty">WhisperService</span> {
+          <span class="kw">private</span> worker:
+          <span class="ty">Worker</span> | <span class="kw">null</span> =
+          <span class="kw">null</span>;
+          <span class="kw">private</span> loadPromise:
+          <span class="ty">Promise</span>&lt;<span class="ty">void</span>&gt; |
+          <span class="kw">null</span> = <span class="kw">null</span>;
+
+          <span class="hn">loadModel</span>(opts:
+          <span class="ty">LoadOptions</span>):
+          <span class="ty">Promise</span>&lt;<span class="ty">void</span>&gt; {
+          <span class="cm"
+            >// Called again while loading? Return the same promise.</span
+          >
+          <span class="kw">if</span> (<span class="kw">this</span>.loadPromise)
+          <span class="kw">return this</span>.loadPromise;
+
+          <span class="kw">this</span>.worker = <span class="kw">new</span>
+          <span class="ty">Worker</span>(WORKER_URL, { type:
+          <span class="str">'module'</span> });
+
+          <span class="kw">this</span>.loadPromise = <span class="kw">new</span>
+          <span class="ty">Promise</span>((resolve, reject) => {
+          <span class="kw">const</span> w =
+          <span class="kw">this</span>.worker!; w.<span class="hn"
+            >addEventListener</span
+          >(<span class="str">'message'</span>, ({ data }) => {
+          <span class="kw">if</span> (data.type ===
+          <span class="str">'MODEL_PROGRESS'</span>)
+          opts.onProgress?.(data.file, data.progress);
+          <span class="kw">if</span> (data.type ===
+          <span class="str">'MODEL_READY'</span>)
+          <span class="hn">resolve</span>();
+          <span class="kw">if</span> (data.type ===
+          <span class="str">'ERROR'</span>) <span class="hn">reject</span>(<span
+            class="kw"
+            >new</span
+          >
+          <span class="ty">Error</span>(data.message)); }); w.<span class="hn"
+            >postMessage</span
+          >({ type: <span class="str">'LOAD_MODEL'</span>, modelId: opts.modelId
+          }); });
+
+          <span class="kw">return this</span>.loadPromise; }
+
+          <span class="hn">transcribe</span>(audio:
+          <span class="ty">Float32Array</span>):
+          <span class="ty">Promise</span>&lt;<span class="ty"
+            >TranscriptChunk</span
+          >[]&gt; { <span class="kw">return new</span>
+          <span class="ty">Promise</span>((resolve, reject) => {
+          <span class="kw">if</span> (!<span class="kw">this</span>.worker) {
+          <span class="hn">reject</span>(<span class="kw">new</span>
+          <span class="ty">Error</span>(<span class="str"
+            >'Model not loaded'</span
+          >)); <span class="kw">return</span>; }
+
+          <span class="kw">const</span> w = <span class="kw">this</span>.worker;
+          <span class="kw">const</span> <span class="hn">handler</span> = ({
+          data }: <span class="ty">MessageEvent</span>) => {
+          <span class="kw">if</span> (data.type ===
+          <span class="str">'TRANSCRIPTION_DONE'</span>) { w.<span class="hn"
+            >removeEventListener</span
+          >(<span class="str">'message'</span>, handler);
+          <span class="hn">resolve</span>(data.chunks); }
+          <span class="kw">if</span> (data.type ===
+          <span class="str">'ERROR'</span>) { w.<span class="hn"
+            >removeEventListener</span
+          >(<span class="str">'message'</span>, handler);
+          <span class="hn">reject</span>(<span class="kw">new</span>
+          <span class="ty">Error</span>(data.message)); } }; w.<span class="hn"
+            >addEventListener</span
+          >(<span class="str">'message'</span>, handler);
+
+          <span class="cm"
+            >// Transfer the ArrayBuffer — zero-copy. The main thread gives up
+            ownership.</span
+          >
+          w.<span class="hn">postMessage</span>({ type:
+          <span class="str">'TRANSCRIBE'</span>, audio }, [audio.buffer]); }); }
+
+          <span class="hn">dispose</span>() {
+          <span class="kw">this</span>.worker?.<span class="hn">terminate</span
+          >(); <span class="kw">this</span>.worker =
+          <span class="kw">null</span>; <span class="kw">this</span>.loadPromise
+          = <span class="kw">null</span>; } }
+
+          <span class="cm"
+            >// Singleton — one worker, shared across all uploads in a
+            session.</span
+          >
+          <span class="kw">export const</span>
+          <span class="hn">whisperService</span> = <span class="kw">new</span>
+          <span class="ty">WhisperService</span>();
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-icon">⚠</div>
+        <div>
+          <strong>Transferable objects:</strong> Notice
+          <code>postMessage({ audio }, [audio.buffer])</code> — the second
+          argument transfers ownership of the underlying
+          <code>ArrayBuffer</code>. After this call, <code>audio</code> in the
+          main thread is detached (zero length). This is intentional: it avoids
+          copying potentially 30 MB of audio data. Don't access
+          <code>audio</code> after sending it to the worker.
+        </div>
+      </div>
+    </section>
+
+    <!-- PHASE 5 -->
+    <section class="section" id="phase-5">
+      <div class="phase-header">
+        <div class="phase-num">PHASE 05</div>
+        <div class="phase-meta">
+          <div class="phase-title">Types & State Machine</div>
+          <div class="phase-sub">~45 minutes · 2 files changed</div>
+        </div>
+      </div>
+
+      <div class="phase-goal">
+        <strong>Goal:</strong> Extend the existing types to add a
+        <code>model-loading</code> state, then rewrite
+        <code>useTranscriptWorkflow</code> to drive the real pipeline: load
+        model → decode audio → transcribe → convert chunks to
+        <code>TranscriptLine[]</code>.
+      </div>
+
+      <div class="code-block">
+        <div class="code-hdr">
+          <span class="code-file">src/types/app.ts</span
+          ><span class="code-lang">TypeScript — MODIFIED</span>
+        </div>
+        <div class="code-body">
+          <span class="cm">// Add 'model-loading' to the existing union</span>
+          <span class="kw">export type</span> <span class="ty">AppState</span> =
+          | <span class="str">'idle'</span> |
+          <span class="str">'file-selected'</span> |
+          <span class="str">'model-loading'</span>
+          <span class="cm">// ← NEW: downloading / initializing Whisper</span> |
+          <span class="str">'processing'</span> |
+          <span class="str">'completed'</span> |
+          <span class="str">'error'</span>;
+
+          <span class="cm"
+            >// Add a progress descriptor for the model download</span
+          >
+          <span class="kw">export type</span>
+          <span class="ty">ModelDownloadProgress</span> = {
+          <span class="cm">// ← NEW</span> file: <span class="ty">string</span>;
+          progress: <span class="ty">number</span>;
+          <span class="cm">// 0–100</span>
+          };
+
+          <span class="cm">// Existing types stay exactly the same</span>
+          <span class="kw">export type</span>
+          <span class="ty">AudioFileInfo</span> = { file:
+          <span class="ty">File</span>; name: <span class="ty">string</span>;
+          size: <span class="ty">number</span>; duration:
+          <span class="ty">number</span> | <span class="kw">null</span> };
+          <span class="kw">export type</span>
+          <span class="ty">TranscriptLine</span> = { id:
+          <span class="ty">string</span>; timestamp:
+          <span class="ty">string</span>; text:
+          <span class="ty">string</span> }; <span class="kw">export type</span>
+          <span class="ty">ProcessingStep</span> = { label:
+          <span class="ty">string</span>; progress:
+          <span class="ty">number</span> };
+        </div>
+      </div>
+
+      <p style="font-size: 13px; color: var(--text-mid); margin: 20px 0 8px">
+        The key logic in <code>useTranscriptWorkflow.ts</code> — replace the
+        timer-based mock with this real pipeline:
+      </p>
+
+      <div class="code-block">
+        <div class="code-hdr">
+          <span class="code-file"
+            >src/hooks/useTranscriptWorkflow.ts — core logic to replace</span
+          ><span class="code-lang">TypeScript</span>
+        </div>
+        <div class="code-body">
+          <span class="cm"
+            >// Helper: convert Whisper's seconds to the app's MM:SS
+            format</span
+          >
+          <span class="kw">function</span>
+          <span class="hn">toTimestamp</span>(secs:
+          <span class="ty">number</span>): <span class="ty">string</span> {
+          <span class="kw">const</span> m = <span class="ty">Math</span>.<span
+            class="hn"
+            >floor</span
+          >(secs / <span class="ac">60</span>).<span class="hn">toString</span
+          >().<span class="hn">padStart</span>(<span class="ac">2</span>,
+          <span class="str">'0'</span>); <span class="kw">const</span> s =
+          <span class="ty">Math</span>.<span class="hn">floor</span>(secs %
+          <span class="ac">60</span>).<span class="hn">toString</span>().<span
+            class="hn"
+            >padStart</span
+          >(<span class="ac">2</span>, <span class="str">'0'</span>);
+          <span class="kw">return</span> <span class="str">`${m}:${s}`</span>; }
+
+          <span class="cm"
+            >// Replace the timer-based mock with this async function</span
+          >
+          <span class="kw">async function</span>
+          <span class="hn">runTranscription</span>( audioFile:
+          <span class="ty">File</span>, modelId: <span class="ty">string</span>,
+          callbacks: { onModelProgress: (file: <span class="ty">string</span>,
+          pct: <span class="ty">number</span>) => <span class="ty">void</span>;
+          onTranscribing: () => <span class="ty">void</span>; }, ):
+          <span class="ty">Promise</span>&lt;<span class="ty"
+            >TranscriptLine</span
+          >[]&gt; {
+          <span class="cm"
+            >// Step 1: load model (no-op if already cached)</span
+          >
+          <span class="kw">await</span> whisperService.<span class="hn"
+            >loadModel</span
+          >({ modelId, onProgress: callbacks.onModelProgress, });
+
+          <span class="cm"
+            >// Step 2: decode audio to 16 kHz mono Float32Array</span
+          >
+          callbacks.<span class="hn">onTranscribing</span>();
+          <span class="kw">const</span> audio = <span class="kw">await</span>
+          <span class="hn">decodeAudioToFloat32</span>(audioFile);
+
+          <span class="cm">// Step 3: run Whisper inference</span>
+          <span class="kw">const</span> chunks =
+          <span class="kw">await</span> whisperService.<span class="hn"
+            >transcribe</span
+          >(audio);
+
+          <span class="cm">// Step 4: convert to TranscriptLine[]</span>
+          <span class="kw">return</span> chunks.<span class="hn">map</span
+          >((chunk, i) => ({ id: <span class="ty">String</span>(i), timestamp:
+          <span class="hn">toTimestamp</span>(chunk.timestamp[<span class="ac"
+            >0</span
+          >]), text: chunk.text, })); }
+
+          <span class="cm"
+            >// In the hook, call this from the effect that previously started
+            mock timers:</span
+          >
+          <span class="cm"
+            >// setState('model-loading') → runTranscription(...) →
+            setState('completed')</span
+          >
+        </div>
+      </div>
+
+      <div class="callout info">
+        <div class="callout-icon">ℹ</div>
+        <div>
+          <strong>Model ID to use:</strong> Pass
+          <code>'Xenova/whisper-base.en'</code> as the <code>modelId</code>. To
+          make this user-selectable later, lift it to a piece of React state.
+          For now, hardcoding it in the hook is fine.
+        </div>
+      </div>
+    </section>
+
+    <!-- PHASE 6 -->
+    <section class="section" id="phase-6">
+      <div class="phase-header">
+        <div class="phase-num">PHASE 06</div>
+        <div class="phase-meta">
+          <div class="phase-title">UI Integration</div>
+          <div class="phase-sub">~1 hour · 2 files changed</div>
+        </div>
+      </div>
+
+      <div class="phase-goal">
+        <strong>Goal:</strong> Surface the new states in the existing UI. The
+        <code>ProcessingStatus</code> component already handles progress display
+        — extend it for the <code>model-loading</code> state with its own
+        progress bar. No new page-level components needed.
+      </div>
+
+      <p style="font-size: 13px; color: var(--text-mid); margin-bottom: 16px">
+        The changes by file:
+      </p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-dot lit">1</div>
+          <div class="step-body">
+            <div class="step-title">
+              ProcessingStatus.tsx — add model download progress
+            </div>
+            <div class="step-desc">
+              When <code>appState === 'model-loading'</code>, show the filename
+              being downloaded and its progress percentage from
+              <code>ModelDownloadProgress</code>. The component already has a
+              ProgressBar — just feed it the model progress value instead of the
+              transcription progress.
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-dot lit">2</div>
+          <div class="step-body">
+            <div class="step-title">
+              TimestampGeneratorPage.tsx — pass new state props
+            </div>
+            <div class="step-desc">
+              Add <code>modelProgress: ModelDownloadProgress | null</code> to
+              the props flowing into ProcessingStatus. This comes directly from
+              the <code>useTranscriptWorkflow</code> hook, which tracks it in a
+              <code>useState</code>.
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-dot lit">3</div>
+          <div class="step-body">
+            <div class="step-title">Status messages for each new state</div>
+            <div class="step-desc">
+              <code>model-loading</code>: "Downloading Whisper model… (first
+              time only)"<br />
+              <code>processing</code>: "Transcribing audio…" + spinner<br />
+              These replace the existing hardcoded step labels.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <div class="callout-icon">⚠</div>
+        <div>
+          <strong>Model download is slow on first run.</strong> whisper-base.en
+          is 145 MB. On a 50 Mbps connection that's ~25 seconds. Make the
+          progress bar prominent and the message reassuring: "Downloading
+          Whisper model — this only happens once, then it's cached offline."
+          After the first run, the Cache API serves it instantly.
+        </div>
+      </div>
+    </section>
+
+    <!-- MODEL DOWNLOAD -->
+    <section class="section" id="model-download">
+      <div class="eyebrow">Going Offline</div>
+      <div class="section-title">Downloading Whisper from HuggingFace</div>
+      <p class="section-desc">
+        By default the app downloads the model from HuggingFace's CDN on first
+        use and caches it in the browser. If you want true offline-first
+        operation (model lives in the project, no initial download ever), follow
+        these steps.
+      </p>
+
+      <div class="steps" style="margin-bottom: 28px">
+        <div class="step">
+          <div class="step-dot lit">1</div>
+          <div class="step-body">
+            <div class="step-title">Install the HuggingFace CLI</div>
+            <div class="step-desc">One-time setup. Requires Python 3.8+.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="term">
+        <div class="term-hdr">Terminal</div>
+        <div class="term-body">
+          <div class="cmd">pip install huggingface_hub</div>
+        </div>
+      </div>
+
+      <div class="steps" style="margin: 28px 0 0">
+        <div class="step">
+          <div class="step-dot lit">2</div>
+          <div class="step-body">
+            <div class="step-title">
+              Download the model into the project's public folder
+            </div>
+            <div class="step-desc">
+              The path structure must match exactly how transformers.js resolves
+              it: <code>public/models/{namespace}/{model-name}/</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="term">
+        <div class="term-hdr">Terminal — run from the project root</div>
+        <div class="term-body">
+          <div class="cmd">
+            <span class="cmd-c"
+              ># Create the directory (namespace matters)</span
+            >
+          </div>
+          <div class="cmd">mkdir -p ./public/models/Xenova</div>
+          <div class="cmd"></div>
+          <div class="cmd">
+            <span class="cmd-c"
+              ># Download only the ONNX files + config JSONs (skip PyTorch
+              .bin)</span
+            >
+          </div>
+          <div class="cmd">
+            huggingface-cli download Xenova/whisper-base.en \ --local-dir
+            ./public/models/Xenova/whisper-base.en \ --include "*.json"
+            "onnx/*.onnx"
+          </div>
+          <div class="cmd"></div>
+          <div class="cmd">
+            <span class="cmd-c"
+              ># Prevent models from being committed to git</span
+            >
+          </div>
+          <div class="cmd">echo "public/models/" >> .gitignore</div>
+        </div>
+      </div>
+
+      <div class="steps" style="margin: 28px 0 0">
+        <div class="step">
+          <div class="step-dot lit">3</div>
+          <div class="step-body">
+            <div class="step-title">Switch the worker to local mode</div>
+            <div class="step-desc">
+              In <code>whisper.worker.ts</code>, flip the two env flags:
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-hdr">
+          <span class="code-file"
+            >src/workers/whisper.worker.ts — two lines to change</span
+          ><span class="code-lang">TypeScript</span>
+        </div>
+        <div class="code-body">
+          env.allowLocalModels = <span class="ac">true</span>;
+          <span class="cm">// ← was false</span> env.allowRemoteModels =
+          <span class="ac">false</span>;
+          <span class="cm">// ← was true (prevents fallback to CDN)</span>
+          env.localModelPath = <span class="str">'/models/'</span>;
+          <span class="cm">// ← add this line</span>
+
+          <span class="cm"
+            >// The model ID 'Xenova/whisper-base.en' now resolves to:</span
+          >
+          <span class="cm"
+            >// /models/Xenova/whisper-base.en/ (served from public/ by
+            Vite)</span
+          >
+        </div>
+      </div>
+
+      <div class="callout info" style="margin-top: 20px">
+        <div class="callout-icon">ℹ</div>
+        <div>
+          <strong>What gets downloaded:</strong> The
+          <code>--include "onnx/*.onnx"</code> flag fetches both the
+          full-precision and quantized encoder/decoder files. With
+          <code>dtype: 'q8'</code>, transformers.js uses only the
+          <code>*_quantized.onnx</code> variants. Total on disk: ~145 MB for
+          base.en.
+        </div>
+      </div>
+
+      <div class="callout warn" style="margin-top: 12px">
+        <div class="callout-icon">⚠</div>
+        <div>
+          <strong>Alternative — git LFS clone:</strong> If you prefer git:
+          <code
+            >git lfs install && git clone
+            https://huggingface.co/Xenova/whisper-base.en
+            ./public/models/Xenova/whisper-base.en</code
+          >. Requires git-lfs installed. The CLI method above is more reliable
+          for first-timers since it skips LFS setup.
+        </div>
+      </div>
+    </section>
+
+    <!-- FILE STRUCTURE -->
+    <section class="section" id="file-structure">
+      <div class="eyebrow">Result</div>
+      <div class="section-title">Final file structure</div>
+      <p class="section-desc">
+        Four new files, two modified. Everything else stays exactly as it is.
+      </p>
+
+      <div class="file-tree">
+        <span class="ft-n">src/</span>
+        <span class="ft-n">├── workers/</span>
+        <span class="ft-n">│ └── </span
+        ><span class="ft-new">whisper.worker.ts ← NEW</span>
+        <span class="ft-n">├── services/</span>
+        <span class="ft-n"
+          >│ ├── mockTranscript.ts (keep — useful for dev without model)</span
+        >
+        <span class="ft-n">│ └── </span
+        ><span class="ft-new">whisperService.ts ← NEW</span>
+        <span class="ft-n">├── utils/</span>
+        <span class="ft-n">│ ├── format.ts (unchanged)</span>
+        <span class="ft-n">│ └── </span
+        ><span class="ft-new">audioProcessing.ts ← NEW</span>
+        <span class="ft-n">├── types/</span>
+        <span class="ft-n">│ └── </span
+        ><span class="ft-mod"
+          >app.ts ← MODIFIED (add model-loading, ModelDownloadProgress)</span
+        >
+        <span class="ft-n">├── hooks/</span>
+        <span class="ft-n">│ ├── </span
+        ><span class="ft-mod"
+          >useTranscriptWorkflow.ts ← MODIFIED (replace mock with real
+          pipeline)</span
+        >
+        <span class="ft-n">│ └── useAudioMetadata.ts (unchanged)</span>
+        <span class="ft-n">├── features/</span>
+        <span class="ft-n">│ ├── processing/</span>
+        <span class="ft-n">│ │ └── </span
+        ><span class="ft-mod"
+          >ProcessingStatus.tsx ← MODIFIED (model-loading state)</span
+        >
+        <span class="ft-n"
+          >│ └── ... (upload, transcript, export unchanged)</span
+        >
+        <span class="ft-n">└── pages/</span>
+        <span class="ft-n"> └── </span
+        ><span class="ft-mod"
+          >TimestampGeneratorPage.tsx ← MODIFIED (pass modelProgress prop)</span
+        >
+
+        <span class="ft-n">public/</span>
+        <span class="ft-n">└── </span
+        ><span class="ft-new">models/ ← NEW (gitignored)</span>
+        <span class="ft-new">
+          └── Xenova/ └── whisper-base.en/ (145 MB, only if going
+          offline-first)</span
+        >
+      </div>
+    </section>
+
+    <!-- TESTING -->
+    <section class="section" id="testing">
+      <div class="eyebrow">Verification</div>
+      <div class="section-title">Testing checklist</div>
+      <p class="section-desc">
+        Work through these in order after completing all six phases. Each one
+        catches a different failure mode.
+      </p>
+
+      <div class="checklist">
+        <div class="chk">
+          <div class="chk-box"></div>
+          <div>
+            <strong style="color: var(--text)"
+              >Vite starts without errors.</strong
+            >
+            Run <code>npm run dev</code>. Check the browser console for
+            COOP/COEP header errors — DevTools Network tab → click any request →
+            Response Headers should show both headers.
+          </div>
+        </div>
+        <div class="chk">
+          <div class="chk-box"></div>
+          <div>
+            <strong style="color: var(--text)"
+              >Model downloads on first upload.</strong
+            >
+            Upload any MP3. The UI should enter <code>model-loading</code> state
+            and show download progress. DevTools Network → filter "onnx" to see
+            the files arriving.
+          </div>
+        </div>
+        <div class="chk">
+          <div class="chk-box"></div>
+          <div>
+            <strong style="color: var(--text)"
+              >Model loads from cache on second upload.</strong
+            >
+            Upload again (same or different file). The
+            <code>model-loading</code> state should skip or be very fast (&lt; 1
+            second). DevTools Network → filter "onnx" → should show "(from
+            cache)" or "(from disk cache)".
+          </div>
+        </div>
+        <div class="chk">
+          <div class="chk-box"></div>
+          <div>
+            <strong style="color: var(--text)">Audio decodes correctly.</strong>
+            In DevTools console, temporarily log the Float32Array from
+            <code>decodeAudioToFloat32</code>: confirm length ≈
+            (file_duration_in_seconds × 16000), values in range −1.0 to 1.0.
+          </div>
+        </div>
+        <div class="chk">
+          <div class="chk-box"></div>
+          <div>
+            <strong style="color: var(--text)"
+              >Transcript chunks have valid timestamps.</strong
+            >
+            After transcription, open the completed state and confirm each
+            <code>TranscriptLine.timestamp</code> is in
+            <code>MM:SS</code> format and monotonically increasing.
+          </div>
+        </div>
+        <div class="chk">
+          <div class="chk-box"></div>
+          <div>
+            <strong style="color: var(--text)"
+              >UI stays responsive during transcription.</strong
+            >
+            While a file is processing, try scrolling the page and clicking
+            other elements. The UI should never freeze — if it does, the audio
+            decoding or model load is happening on the main thread (not the
+            worker).
+          </div>
+        </div>
+        <div class="chk">
+          <div class="chk-box"></div>
+          <div>
+            <strong style="color: var(--text)">Build succeeds.</strong> Run
+            <code>npm run build</code> and confirm no TypeScript errors. Preview
+            the production build with <code>npm run preview</code> and verify
+            the worker URL resolves correctly (no 404 on the worker chunk).
+          </div>
+        </div>
+        <div class="chk">
+          <div class="chk-box"></div>
+          <div>
+            <strong style="color: var(--text)"
+              >(Offline mode only) Local model loads without network.</strong
+            >
+            Put the browser in offline mode (DevTools → Network → Offline).
+            Upload a file. The model should load from <code>/models/</code> with
+            no network requests.
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  // === Waveform canvas ===
+  (function () {
+    const canvas = document.getElementById("waveCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const accent = "rgba(184,217,74,";
+
+    function resize() {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    const prefersReduce = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    let t = 0;
+    function draw() {
+      const W = canvas.width,
+        H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+
+      // Gradient fade: transparent at edges
+      const grad = ctx.createLinearGradient(0, 0, W, 0);
+      grad.addColorStop(0, accent + "0)");
+      grad.addColorStop(0.1, accent + "1)");
+      grad.addColorStop(0.9, accent + "1)");
+      grad.addColorStop(1, accent + "0)");
+
+      // Main waveform — two harmonics for voice-like complexity
+      ctx.beginPath();
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1.5;
+      for (let x = 0; x <= W; x++) {
+        const p = x / W;
+        const y =
+          H / 2 +
+          Math.sin(p * Math.PI * 10 + t) * 22 +
+          Math.sin(p * Math.PI * 24 + t * 1.4) * 9 +
+          Math.sin(p * Math.PI * 5 + t * 0.6) * 14;
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Secondary ghost waveform (offset)
+      ctx.beginPath();
+      ctx.strokeStyle = accent + "0.18)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= W; x++) {
+        const p = x / W;
+        const y =
+          H / 2 +
+          Math.sin(p * Math.PI * 10 + t - 0.4) * 22 +
+          Math.sin(p * Math.PI * 24 + t * 1.4 - 0.6) * 9 +
+          Math.sin(p * Math.PI * 5 + t * 0.6 - 0.2) * 14;
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      t += prefersReduce ? 0 : 0.008;
+      if (!prefersReduce) requestAnimationFrame(draw);
+    }
+
+    draw();
+    if (prefersReduce) draw(); // static frame only
+  })();
+
+  // === Nav scroll tracking ===
+  (function () {
+    const sections = document.querySelectorAll("[id]");
+    const navLinks = document.querySelectorAll(".nav-link");
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          navLinks.forEach((link) => {
+            link.classList.toggle(
+              "active",
+              link.getAttribute("href") === "#" + entry.target.id,
+            );
+          });
+        });
+      },
+      { rootMargin: "-15% 0% -70% 0%", threshold: 0 },
+    );
+
+    sections.forEach((s) => obs.observe(s));
+  })();
+</script>
