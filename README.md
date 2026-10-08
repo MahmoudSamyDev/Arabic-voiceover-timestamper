@@ -30,8 +30,8 @@ Transcription is powered by OpenAI's Whisper model, running in-browser via [Tran
 ### Install and run
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 The app is served locally with hot module reloading. On first use it downloads the Whisper model (`Xenova/whisper-small`, a multilingual checkpoint, ~490 MB) from the Hugging Face CDN and caches it in the browser for future sessions. The larger multilingual model is used because Whisper's smaller checkpoints are noticeably weaker on Arabic than on European languages.
@@ -39,9 +39,9 @@ The app is served locally with hot module reloading. On first use it downloads t
 ### Other scripts
 
 ```bash
-npm run build     # Type-check and build for production (output: dist/)
-npm run lint      # Run ESLint
-npm run preview   # Serve the production build locally
+pnpm run build     # Type-check and build for production (output: dist/)
+pnpm run lint      # Run ESLint
+pnpm run preview   # Serve the production build locally
 ```
 
 ## How it works

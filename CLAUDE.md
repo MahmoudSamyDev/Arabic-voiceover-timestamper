@@ -5,10 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev       # Start Vite dev server with HMR
-npm run build     # TypeScript type check (tsc -b) + Vite production build → dist/
-npm run lint      # ESLint static analysis
-npm run preview   # Serve production build locally
+pnpm run dev       # Start Vite dev server with HMR
+pnpm run build     # TypeScript type check (tsc -b) + Vite production build → dist/
+pnpm run lint      # ESLint static analysis
+pnpm run preview   # Serve production build locally
 ```
 
 No test runner is configured.
